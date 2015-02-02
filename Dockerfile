@@ -16,5 +16,6 @@ RUN svn checkout https://github.com/efrecon/etcd-tcl/trunk/etcd /opt/etcdctl/lib
 VOLUME /data
 WORKDIR /data
 
-# Arrange to autoexecute biot as daemon on start
+# Arrange to autoexecute etcdctl on start, connecting to the interface that
+# usually corresponds to docker0
 ENTRYPOINT ["tclsh8.6", "/opt/etcdctl/etcdctl.tcl", "-peers", "172.17.42.1:4001"]
