@@ -17,6 +17,14 @@ you would write:
 
     tclsh8.6 etcdctl.tcl write /test README.md
 
+Note that the name of the file really is a globbing pattern, meaning
+that given a directory called `/home/emmanuel/mydir` on your local
+disk, the following command would mirror all the files that it
+contains (not recursively) into the etcd key space.  This would ignore
+backup files as these are ignored by default.
+
+    tclsh8.6 etcdctl.tcl write /test /home/emmanuel/mydir/*
+
 ## Docker
 
 This project is automatically being built at the docker hub. To run a

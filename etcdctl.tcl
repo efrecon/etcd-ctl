@@ -1,5 +1,8 @@
 array set CTL {
     peers     {}
+    write     {
+	-ignore    {*~ *.bak}
+    }
 }
 
 set rootdir [file normalize [file dirname [info script]]]
@@ -87,19 +90,44 @@ foreach pspec [split $CTL(-peers) ","] {
 
 switch -nocase -- [lindex $argv 0] {
     "write" {
+	# Get default options for write command
+	array set CMD {}
+	if { [info exists CTL(write)] } {
+	    array set CMD $CTL(write)
+	}
+
+	# Parse command specific options
+	foreach opt [array names CMD -*] {
+	    getopt argv $opt CMD($opt) $CMD($opt)
+	}
+
+	# Now find files to be written to etcd
 	set dirname [lindex $argv 1]
-	set fpath [lindex $argv 2]
-	if { [catch {open $fpath} fd] == 0 } {
-	    fconfigure $fd -encoding binary -translation binary
-	    set fname [file tail $fpath]
-	    set key [file join $dirname $fname]
-	    set dta [read $fd]
-	    foreach p $CTL(peers) {
-		::etcd::write $p $key $dta
+	foreach fpath [glob -nocomplain -- [lindex $argv 2]] {
+	    # If name of file matches ignore list, we won't write the
+	    # file.
+	    set ignore 0
+	    foreach ptn $CMD(-ignore) {
+		if { [string match $ptn [file tail $fpath]] } {
+		    set ignore 1
+		    break
+		}
 	    }
-	    close $fd
-	} else {
-	    puts stderr "Could not open $fpath: $fd"
+	    
+	    if { !$ignore } {
+		if { [catch {open $fpath} fd] == 0 } {
+		    fconfigure $fd -encoding binary -translation binary
+		    set fname [file tail $fpath]
+		    set key [file join $dirname $fname]
+		    set dta [read $fd]
+		    foreach p $CTL(peers) {
+			::etcd::write $p $key $dta
+		    }
+		    close $fd
+		} else {
+		    puts stderr "Could not open $fpath: $fd"
+		}
+	    }
 	}
     }
 }
