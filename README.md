@@ -12,8 +12,8 @@ trivial to be implemented, they were left aside as an exercise.
 However, `write` does not exist in the original client...
 
 In other words, if you want to write the content of a file called
-README.md into the directory called /test in the etcd key space, you
-would write:
+`README.md` into the directory called `/test` in the etcd key space,
+you would write:
 
     tclsh8.6 etcdctl.tcl write /test README.md
 
