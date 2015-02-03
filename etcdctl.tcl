@@ -40,6 +40,8 @@ proc ::help:dump { { hdr "" } } {
     puts ""
     puts "COMMANDS:"
     puts "\twrite\tWrite content of file to key with same name"
+    puts "\tput\tSet keys and to (new) values"
+    puts "\tget\tGet content of keys"
     puts ""
     puts "GLOBAL OPTIONS:"
     foreach { arg val dsc } $::prg_args {
@@ -104,21 +106,40 @@ foreach pspec [split $CTL(-peers) ","] {
     }
 }
 
-switch -nocase -- [lindex $argv 0] {
-    "write" {
-	# Get default options for write command
-	array set CMD {}
-	if { [info exists CTL(write)] } {
-	    array set CMD $CTL(write)
-	}
+proc ::cmdopt { cmd minargs {msg ""}} {
+    global argv
+    global CTL
 
-	# Parse command specific options
-	foreach opt [array names CMD -*] {
-	    getopt argv $opt CMD($opt) $CMD($opt)
+    # Get default options for write command
+    array set CMD {}
+    if { [info exists CTL($cmd)] } {
+	array set CMD $CTL($cmd)
+    }
+    
+    # Parse command specific options
+    foreach opt [array names CMD -*] {
+	getopt argv $opt CMD($opt) $CMD($opt)
+    }
+
+    if { [llength $argv] < $minargs } {
+	if { $msg eq "" } {
+	    ::help:dump "$cmd takes at least $minargs argument(s)"
+	} else {
+	    ::help:dump $msg
 	}
+    }
+
+    return [array get CMD]
+}
+
+set cmd [string tolower [lindex $argv 0]]
+set argv [lrange $argv 1 end]
+switch -nocase -- $cmd {
+    "write" {
+	array set CMD [::cmdopt $cmd 2 "CMD USAGE! $cmd etcd_dir file ..."]
 
 	# Now find files to be written to etcd
-	set dirname [lindex $argv 1]
+	set dirname [lindex $argv 0]
 	foreach fspec [lrange $argv 1 end] {
 	    log "Copying content of files matching $fspec into $dirname"
 	    foreach fpath [glob -nocomplain -- $fspec] {
@@ -147,6 +168,26 @@ switch -nocase -- [lindex $argv 0] {
 			puts stderr "Could not open $fpath: $fd"
 		    }
 		}
+	    }
+	}
+    }
+    "get" {
+	array set CMD [::cmdopt $cmd 1 "CMD USAGE! $cmd key ..." ]
+	
+	foreach key $argv {
+	    log "Getting content of key $key"
+	    foreach p $CTL(peers) {
+		puts "[::etcd::read $p $key]"
+	    }
+	}
+    }
+    "put" {
+	array set CMD [::cmdopt $cmd 2 "CMD USAGE! $cmd \[key val\] ..." ]
+	
+	foreach {key val} $argv {
+	    log "Setting content of key $key to $val"
+	    foreach p $CTL(peers) {
+		puts "[::etcd::write $p $key $val]"
 	    }
 	}
     }
