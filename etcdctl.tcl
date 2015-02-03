@@ -1,5 +1,6 @@
 array set CTL {
     peers     {}
+    verbose   0
     write     {
 	-ignore    {*~ *.bak}
     }
@@ -21,6 +22,7 @@ package require etcd
 
 set prg_args {
     -peers   {127.0.0.1:4001}    "Comma separated list of peers to communicate with"
+    -v       ""                  "Turn on extra verbosity"
     -h       ""                  "Print this help and exit"
 }
 
@@ -64,11 +66,25 @@ proc ::getopt {_argv name {_var ""} {default ""}} {
     }
 }
 
+proc ::log {msg} {
+    global CTL
+
+    if { $CTL(verbose) } {
+	puts stderr "VERBOSE: $msg"
+    }
+}
+
 array set CTL {}
 foreach {arg val dsc} $prg_args {
     set CTL($arg) $val
 }
 
+if { [getopt argv -h] } {
+    ::help:dump
+}
+if { [getopt argv -v] } {
+    set CTL(verbose) 1
+}
 foreach opt [array names CTL -*] {
     getopt argv $opt CTL($opt) $CTL($opt)
 }
@@ -103,29 +119,33 @@ switch -nocase -- [lindex $argv 0] {
 
 	# Now find files to be written to etcd
 	set dirname [lindex $argv 1]
-	foreach fpath [glob -nocomplain -- [lindex $argv 2]] {
-	    # If name of file matches ignore list, we won't write the
-	    # file.
-	    set ignore 0
-	    foreach ptn $CMD(-ignore) {
-		if { [string match $ptn [file tail $fpath]] } {
-		    set ignore 1
-		    break
-		}
-	    }
-	    
-	    if { !$ignore } {
-		if { [catch {open $fpath} fd] == 0 } {
-		    fconfigure $fd -encoding binary -translation binary
-		    set fname [file tail $fpath]
-		    set key [file join $dirname $fname]
-		    set dta [read $fd]
-		    foreach p $CTL(peers) {
-			::etcd::write $p $key $dta
+	foreach fspec [lrange $argv 1 end] {
+	    log "Copying content of files matching $fspec into $dirname"
+	    foreach fpath [glob -nocomplain -- $fspec] {
+		# If name of file matches ignore list, we won't write
+		# the file.
+		set ignore 0
+		foreach ptn $CMD(-ignore) {
+		    if { [string match $ptn [file tail $fpath]] } {
+			log "File $fpath matches $ptn, ignoring"
+			set ignore 1
+			break
 		    }
-		    close $fd
-		} else {
-		    puts stderr "Could not open $fpath: $fd"
+		}
+		
+		if { !$ignore } {
+		    if { [catch {open $fpath} fd] == 0 } {
+			fconfigure $fd -encoding binary -translation binary
+			set fname [file tail $fpath]
+			set key [file join $dirname $fname]
+			set dta [read $fd]
+			foreach p $CTL(peers) {
+			    ::etcd::write $p $key $dta
+			}
+			close $fd
+		    } else {
+			puts stderr "Could not open $fpath: $fd"
+		    }
 		}
 	    }
 	}
