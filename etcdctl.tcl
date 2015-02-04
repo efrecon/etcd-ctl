@@ -1,5 +1,6 @@
 array set CTL {
     peers     {}
+    levels    {1 CRITICAL 2 ERROR 3 WARN 4 NOTICE 5 INFO 6 DEBUG}
     verbose   0
     write     {
 	-ignore    {*~ *.bak}
@@ -22,7 +23,7 @@ package require etcd
 
 set prg_args {
     -peers   {127.0.0.1:4001}    "Comma separated list of peers to communicate with"
-    -v       ""                  "Turn on extra verbosity"
+    -v       0                   "Verbosity level \[0-6\]"
     -h       ""                  "Print this help and exit"
 }
 
@@ -68,11 +69,12 @@ proc ::getopt {_argv name {_var ""} {default ""}} {
     }
 }
 
-proc ::log {msg} {
+proc ::log { lvl msg} {
     global CTL
 
-    if { $CTL(verbose) } {
-	puts stderr "VERBOSE: $msg"
+    if { $CTL(verbose) >= $lvl } {
+	array set L $CTL(levels)
+	puts stderr "\[$L($lvl)\] $msg"
     }
 }
 
@@ -84,9 +86,6 @@ foreach {arg val dsc} $prg_args {
 if { [getopt argv -h] } {
     ::help:dump
 }
-if { [getopt argv -v] } {
-    set CTL(verbose) 1
-}
 foreach opt [array names CTL -*] {
     getopt argv $opt CTL($opt) $CTL($opt)
 }
@@ -95,6 +94,9 @@ foreach opt [array names CTL -*] {
 if { [llength $argv] <= 0 } {
     ::help:dump "No command specified!"
 }
+
+# Hook in log facility in etcd
+::etcd::logger ::log
 
 # Declare context for peers
 foreach pspec [split $CTL(-peers) ","] {
