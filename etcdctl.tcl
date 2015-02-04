@@ -72,7 +72,7 @@ proc ::getopt {_argv name {_var ""} {default ""}} {
 proc ::log { lvl msg} {
     global CTL
 
-    if { $CTL(verbose) >= $lvl } {
+    if { $CTL(-v) >= $lvl } {
 	array set L $CTL(levels)
 	puts stderr "\[$L($lvl)\] $msg"
     }
@@ -96,6 +96,7 @@ if { [llength $argv] <= 0 } {
 }
 
 # Hook in log facility in etcd
+::etcd::verbosity $CTL(-v)
 ::etcd::logger ::log
 
 # Declare context for peers
