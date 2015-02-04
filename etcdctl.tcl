@@ -143,20 +143,21 @@ switch -nocase -- $cmd {
 	# Now find files to be written to etcd
 	set dirname [lindex $argv 0]
 	foreach fspec [lrange $argv 1 end] {
-	    log "Copying content of files matching $fspec into $dirname"
+	    log 4 "Copying content of files matching $fspec into $dirname"
 	    foreach fpath [glob -nocomplain -- $fspec] {
 		# If name of file matches ignore list, we won't write
 		# the file.
 		set ignore 0
 		foreach ptn $CMD(-ignore) {
 		    if { [string match $ptn [file tail $fpath]] } {
-			log "File $fpath matches $ptn, ignoring"
+			log 5 "File $fpath matches $ptn, ignoring"
 			set ignore 1
 			break
 		    }
 		}
 		
 		if { !$ignore } {
+		    log 5 "Reading content of file $fpath to push to $dirname"
 		    if { [catch {open $fpath} fd] == 0 } {
 			fconfigure $fd -encoding binary -translation binary
 			set fname [file tail $fpath]
@@ -167,7 +168,7 @@ switch -nocase -- $cmd {
 			}
 			close $fd
 		    } else {
-			puts stderr "Could not open $fpath: $fd"
+			log 2 "Could not open $fpath: $fd"
 		    }
 		}
 	    }
@@ -177,7 +178,7 @@ switch -nocase -- $cmd {
 	array set CMD [::cmdopt $cmd 1 "CMD USAGE! $cmd key ..." ]
 	
 	foreach key $argv {
-	    log "Getting content of key $key"
+	    log 5 "Getting content of key $key"
 	    foreach p $CTL(peers) {
 		puts "[::etcd::read $p $key]"
 	    }
@@ -187,7 +188,7 @@ switch -nocase -- $cmd {
 	array set CMD [::cmdopt $cmd 2 "CMD USAGE! $cmd \[key val\] ..." ]
 	
 	foreach {key val} $argv {
-	    log "Setting content of key $key to $val"
+	    log 5 "Setting content of key $key to $val"
 	    foreach p $CTL(peers) {
 		puts "[::etcd::write $p $key $val]"
 	    }
