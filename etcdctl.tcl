@@ -4,6 +4,7 @@ array set CTL {
     verbose   0
     write     {
 	-ignore    {*~ *.bak}
+	-encoding  "utf-8"
     }
 }
 
@@ -160,7 +161,10 @@ switch -nocase -- $cmd {
 		if { !$ignore } {
 		    log 5 "Reading content of file $fpath to push to $dirname"
 		    if { [catch {open $fpath} fd] == 0 } {
-			fconfigure $fd -encoding binary -translation binary
+			fconfigure $fd -translation binary
+			if { $CMD(-encoding) ne "" } {
+			    fconfigure $fd -encoding $CMD(-encoding)
+			}
 			set fname [file tail $fpath]
 			set key [file join $dirname $fname]
 			set dta [read $fd]
