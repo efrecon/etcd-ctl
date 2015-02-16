@@ -87,8 +87,11 @@ foreach {arg val dsc} $prg_args {
 if { [getopt argv -h] } {
     ::help:dump
 }
-foreach opt [array names CTL -*] {
-    getopt argv $opt CTL($opt) $CTL($opt)
+for {set eaten ""} {$eaten ne $argv} {} {
+    set eaten $argv
+    foreach opt [array names CTL -*] {
+	getopt argv $opt CTL($opt) $CTL($opt)
+    }
 }
 
 # No remaining args? dump help and exit
