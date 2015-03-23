@@ -1,3 +1,5 @@
+#! /usr/bin/env tclsh
+
 array set CTL {
     peers     {}
     levels    {1 CRITICAL 2 ERROR 3 WARN 4 NOTICE 5 INFO 6 DEBUG}
@@ -5,6 +7,7 @@ array set CTL {
     write     {
 	-ignore    {*~ *.bak}
 	-encoding  "utf-8"
+	-recurse   0
     }
 }
 
@@ -26,6 +29,7 @@ set prg_args {
     -peers   {127.0.0.1:4001}    "Comma separated list of peers to communicate with"
     -v       0                   "Verbosity level \[0-6\]"
     -h       ""                  "Print this help and exit"
+    -dryrun  0                   "Dry run will only show what would be done"
 }
 
 # Dump help based on the command-line option specification and exit.
@@ -139,47 +143,67 @@ proc ::cmdopt { cmd minargs {msg ""}} {
     return [array get CMD]
 }
 
+proc ::wrKeys { dirname fspec wropts } {
+    global CTL
+
+    array set CMD $wropts
+    foreach fpath [glob -nocomplain -- $fspec] {
+	# If name of file matches ignore list, we won't write
+	# the file.
+	set ignore 0
+	foreach ptn $CMD(-ignore) {
+	    if { [string match $ptn [file tail $fpath]] } {
+		log 5 "File $fpath matches $ptn, ignoring"
+		set ignore 1
+		break
+	    }
+	}
+		
+	if { !$ignore } {
+	    if { [file isdirectory $fpath] } {
+		if { [string is true $CMD(-recurse)] } {
+		    log 5 "Recursing in $fpath to push to $dirname"
+		    set ptn [file tail $fspec]
+		    wrKeys \
+			[file join $dirname [file tail $fpath]] \
+			[file join $fpath $ptn] \
+			$wropts
+		}
+	    } else {
+		set fname [file tail $fpath]
+		set key [file join $dirname $fname]
+		log 5 "Reading content of file $fpath to key $key"
+		if { [catch {open $fpath} fd] == 0 } {
+		    fconfigure $fd -translation binary
+		    if { $CMD(-encoding) ne "" } {
+			fconfigure $fd -encoding $CMD(-encoding)
+		    }
+		    set dta [read $fd]
+		    if { [string is false $CTL(-dryrun)] } {
+			foreach p $CTL(peers) {
+			    ::etcd::write $p $key $dta
+			}
+		    }
+		    close $fd
+		} else {
+		    log 2 "Could not open $fpath: $fd"
+		}
+	    }
+	}
+    }
+}
+
+
 set cmd [string tolower [lindex $argv 0]]
 set argv [lrange $argv 1 end]
 switch -nocase -- $cmd {
     "write" {
-	array set CMD [::cmdopt $cmd 2 "CMD USAGE! $cmd etcd_dir file ..."]
-
+	set wropts [::cmdopt $cmd 2 "CMD USAGE! $cmd etcd_dir file ..."]
 	# Now find files to be written to etcd
 	set dirname [lindex $argv 0]
 	foreach fspec [lrange $argv 1 end] {
 	    log 4 "Copying content of files matching $fspec into $dirname"
-	    foreach fpath [glob -nocomplain -- $fspec] {
-		# If name of file matches ignore list, we won't write
-		# the file.
-		set ignore 0
-		foreach ptn $CMD(-ignore) {
-		    if { [string match $ptn [file tail $fpath]] } {
-			log 5 "File $fpath matches $ptn, ignoring"
-			set ignore 1
-			break
-		    }
-		}
-		
-		if { !$ignore } {
-		    log 5 "Reading content of file $fpath to push to $dirname"
-		    if { [catch {open $fpath} fd] == 0 } {
-			fconfigure $fd -translation binary
-			if { $CMD(-encoding) ne "" } {
-			    fconfigure $fd -encoding $CMD(-encoding)
-			}
-			set fname [file tail $fpath]
-			set key [file join $dirname $fname]
-			set dta [read $fd]
-			foreach p $CTL(peers) {
-			    ::etcd::write $p $key $dta
-			}
-			close $fd
-		    } else {
-			log 2 "Could not open $fpath: $fd"
-		    }
-		}
-	    }
+	    wrKeys $dirname $fspec $wropts
 	}
     }
     "get" {
@@ -187,8 +211,10 @@ switch -nocase -- $cmd {
 	
 	foreach key $argv {
 	    log 5 "Getting content of key $key"
-	    foreach p $CTL(peers) {
-		puts "[::etcd::read $p $key]"
+	    if { [string is false $CTL(-dryrun)] } {
+		foreach p $CTL(peers) {
+		    puts "[::etcd::read $p $key]"
+		}
 	    }
 	}
     }
@@ -197,8 +223,10 @@ switch -nocase -- $cmd {
 	
 	foreach {key val} $argv {
 	    log 5 "Setting content of key $key to $val"
-	    foreach p $CTL(peers) {
-		puts "[::etcd::write $p $key $val]"
+	    if { [string is false $CTL(-dryrun)] } {
+		foreach p $CTL(peers) {
+		    puts "[::etcd::write $p $key $val]"
+		}
 	    }
 	}
     }
